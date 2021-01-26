@@ -8,9 +8,9 @@ plugins {
 }
 
 def okexName = 'okex-adapter'
-def okexVersion = 'alpha-0.1.4.13'
+def okexVersion = 'alpha-0.1.4.14'
 def okcoinName = 'okcoin-adapter'
-def okcoinVersion = 'alpha-1.0.0.9'
+def okcoinVersion = 'alpha-1.0.0.10'
 
 repositories {
     mavenCentral()
