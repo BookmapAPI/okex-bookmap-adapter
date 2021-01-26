@@ -1,13 +1,11 @@
 package com.stableapps.okex;
 
-import java.io.IOException;
-
 import com.stableapps.bookmapadapter.client.Connector;
 import com.stableapps.bookmapadapter.model.rest.InstrumentFutures;
 import com.stableapps.bookmapadapter.model.rest.InstrumentSpot;
 import com.stableapps.bookmapadapter.provider.RealTimeTradingProvider;
-import com.stableapps.bookmapadapter.util.Utils;
 import com.stableapps.bookmapadapter.util.Constants.Market;
+import com.stableapps.bookmapadapter.util.Utils;
 
 import velox.api.layer1.common.Log;
 import velox.api.layer1.data.SubscribeInfo;

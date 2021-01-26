@@ -7,13 +7,18 @@ package com.stableapps.bookmapadapter.model;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  *
  * @author aris
  */
 @Data
+@EqualsAndHashCode(callSuper = false)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SubscribeOrderFutures extends Message {
 
     public String table;

@@ -2,12 +2,14 @@ package com.stableapps.bookmapadapter.model;
 
 import java.io.IOException;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 @SuppressWarnings("serial")
 public class CustomSubscribeContractTradeRecordInitialResponseDeserializer extends StdDeserializer<SubscribeContractTradeRecordInitialResponse> {
     public CustomSubscribeContractTradeRecordInitialResponseDeserializer() { 

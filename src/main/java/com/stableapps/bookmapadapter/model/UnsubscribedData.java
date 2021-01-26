@@ -5,6 +5,8 @@
  */
 package com.stableapps.bookmapadapter.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import lombok.Data;
 
 /**
@@ -12,6 +14,7 @@ import lombok.Data;
  * @author aris
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UnsubscribedData {
 
 	boolean result;

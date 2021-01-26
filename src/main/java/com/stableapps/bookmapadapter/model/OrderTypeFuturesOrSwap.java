@@ -5,12 +5,15 @@
  */
 package com.stableapps.bookmapadapter.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import lombok.Getter;
 
 /**
  *
  * @author aris
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public enum OrderTypeFuturesOrSwap {
 	OpenLongPosition(1),
 	OpenShortPosition(2),

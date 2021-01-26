@@ -5,12 +5,13 @@
  */
 package com.stableapps.bookmapadapter.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  *
  * @author aris
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SubscribeContractUserPositionsFixedMarginResponse extends Message {
 
 	public boolean binary;

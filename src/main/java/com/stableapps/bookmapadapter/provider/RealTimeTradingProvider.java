@@ -941,7 +941,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                     if (ordersFutures == null)
                         return;
 
-                    OrderDataFutures[] futures = ordersFutures.getOrder_info();
+                    OrderDataFutures[] futures = ordersFutures.getOrderInfo();
 
                     if (futures == null)
                         return;

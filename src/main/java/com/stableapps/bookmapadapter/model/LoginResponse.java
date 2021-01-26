@@ -5,15 +5,19 @@
  */
 package com.stableapps.bookmapadapter.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  *
  * @author aris
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonDeserialize(using = CustomLoginResponseDeserializer.class)
+@EqualsAndHashCode(callSuper=false)
 public class LoginResponse extends Message {
 	int binary;
 	String channel;

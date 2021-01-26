@@ -5,15 +5,19 @@
  */
 package com.stableapps.bookmapadapter.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  *
  * @author aris
  */
 @Data
+@EqualsAndHashCode(callSuper = false)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonDeserialize(using = CustomSubscribeContractTradeRecordInitialResponseDeserializer.class)
 public class SubscribeContractTradeRecordInitialResponse extends Message {
 

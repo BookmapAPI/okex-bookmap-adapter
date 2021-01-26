@@ -8,13 +8,18 @@ package com.stableapps.bookmapadapter.model;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  *
  * @author aris
  */
 @Data
+@EqualsAndHashCode(callSuper = false)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SubscribeFuturesAccountResponse extends Message {
 
     public String table;
