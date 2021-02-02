@@ -453,13 +453,14 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
                 provider.connector.wslogin();
             }
 
-            aliasInstruments.keySet().forEach(alias -> {
+            for (String alias : aliasInstruments.keySet()) {
                 int at = alias.indexOf('@');
                 String symbol = alias.substring(at + 1);
                 String type = alias.substring(0, at);
-                Pair<Double, Double> pipsPrice = pipsSizeMultipliers.get(alias);
-                SubscribeInfoCrypto info = new SubscribeInfoCrypto(symbol, "", type, pipsPrice.getLeft(),
-                        pipsPrice.getRight());
+                Pair<Double, Double> pipsSizeMultiplier = pipsSizeMultipliers.get(alias);
+                double pips = pipsSizeMultiplier.getLeft();
+                Double sizeMultiplier = pipsSizeMultiplier.getRight() == null ? Double.NaN : pipsSizeMultiplier.getRight() ;
+                SubscribeInfoCrypto info = new SubscribeInfoCrypto(symbol, "", type, pips, sizeMultiplier);
 
                 isSubscribed(info, true);
 
@@ -468,8 +469,7 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
                     RealTimeTradingProvider provider = (RealTimeTradingProvider) RealTimeProvider.this;
                     provider.getSubscribed(info);
                 }
-				
-			});
+            }
 			adminListeners.forEach(listener -> listener.onConnectionRestored());
 			RealTimeProvider.this.onConnectionRestored();
 		}
