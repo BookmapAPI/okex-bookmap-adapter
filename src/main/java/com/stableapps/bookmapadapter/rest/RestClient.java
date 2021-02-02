@@ -8,6 +8,7 @@ package com.stableapps.bookmapadapter.rest;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
@@ -71,7 +72,7 @@ public class RestClient extends AbstractRestClient {
 		
 		while (retry < MAX_RETRY) {
 			try {
-			    String timestamp = Instant.now().toString();
+			    String timestamp = Instant.now().truncatedTo(ChronoUnit.MILLIS).toString();
 			    String formAsJson = json;
 			    String messageBody = Connector.createMessageBody(timestamp, "POST", path, formAsJson);
 			    String sign = Connector.generateSignature(secretKey, messageBody);
@@ -141,7 +142,7 @@ public class RestClient extends AbstractRestClient {
 
         while (retry < MAX_RETRY) {
             try {
-                String timestamp = Instant.now().toString();
+                String timestamp = Instant.now().truncatedTo(ChronoUnit.MILLIS).toString();
                 String formAsJson = json;
                 String pathForMessage = path;
                 String messageBody = Connector.createMessageBody(timestamp, method, pathForMessage, queryParams,
