@@ -574,7 +574,7 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
             Log.info("isInfoCrypro");
             SubscribeInfoCrypto subscribeInfoCrypto = (SubscribeInfoCrypto) subscribeInfo;
             pair = new ImmutablePair<Double, Double>(subscribeInfoCrypto.pips,
-                    subscribeInfoCrypto.priceMultiplier);
+                    subscribeInfoCrypto.sizeMultiplier);
         } else {
             //this is a workaround for a saving alias parameters in Bookmap
             //A default tickSize will be accepted if no saved pipsMultipilier
