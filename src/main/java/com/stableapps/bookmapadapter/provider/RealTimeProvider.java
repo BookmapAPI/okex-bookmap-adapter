@@ -95,10 +95,6 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
     public final String wsPortNumber;
     public final String wsLink;
     
-    int tempLinesCount;
-    int tempPricesCount;
-    double tempPips = Double.NaN;
-    
     static DecimalFormat df1 = new DecimalFormat(".###");
     Set<Double> askPrices = new TreeSet<>(Collections.reverseOrder());
     Set<Double> bidPrices = new TreeSet<>(Collections.reverseOrder());
@@ -619,11 +615,7 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
                 double pips = genericInstruments.get(alias).getTickSize();
                 final Instrument instrument = new Instrument(alias, pips);
                 aliasInstruments.put(alias, instrument);
-
                 Log.info("instrumentInfo to BM alias " + alias + " tickSize " + tickSize);
-                tempLinesCount = 0;
-                tempPricesCount = 0;
-                tempPips = Double.NaN;
 
                 final InstrumentInfo instrumentInfo = new InstrumentInfo(symbol, exchange, type1, tickSize, 1, alias,
                         false);
