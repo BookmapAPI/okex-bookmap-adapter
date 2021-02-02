@@ -155,14 +155,20 @@ public class RestClient extends AbstractRestClient {
                     }
                 }
 
-                R response = target.request(javax.ws.rs.core.MediaType.APPLICATION_JSON).header("User-Agent",
+                Response response = target.request(javax.ws.rs.core.MediaType.APPLICATION_JSON).header("User-Agent",
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36")
                         .header("OK-ACCESS-KEY", apiKey).header("OK-ACCESS-SIGN", sign)
                         .header("OK-ACCESS-TIMESTAMP", timestamp).header("OK-ACCESS-PASSPHRASE", passPhraze)
-                        .get(responseClass);
-
-                Log.info(String.format("Rest call to %s successful", path));
-                return response;
+                        .get(Response.class);
+                if (response.getStatus() != Response.Status.OK.getStatusCode() ) {
+                    // if they put the custom error stuff in the entity
+                    String errorMessage = response.readEntity(String.class);
+                    Log.info(errorMessage);
+                    throw new Exception(errorMessage);
+                } else {
+                    Log.info(String.format("Rest call to %s successful", path));
+                    return response.readEntity(responseClass);    
+                }
             } catch (Exception e) {
                 Log.info(String.format("Rest call to %s failed: %s", path, e.getMessage()));
                 try {
