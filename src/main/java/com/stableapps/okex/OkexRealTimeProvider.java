@@ -1,7 +1,5 @@
 package com.stableapps.okex;
 
-import java.io.IOException;
-
 import com.stableapps.bookmapadapter.client.Connector;
 import com.stableapps.bookmapadapter.model.rest.InstrumentFutures;
 import com.stableapps.bookmapadapter.model.rest.InstrumentSpot;
