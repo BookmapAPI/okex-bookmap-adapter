@@ -20,6 +20,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.apache.commons.codec.binary.Base32;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.java_websocket.util.Base64;
 
@@ -51,11 +52,13 @@ import com.stableapps.bookmapadapter.util.Constants;
 import com.stableapps.bookmapadapter.util.Utils;
 
 import lombok.Data;
+import velox.api.layer0.credentialscomponents.CredentialsSerializationField;
 import velox.api.layer1.Layer1ApiAdminListener;
 import velox.api.layer1.common.Log;
 import velox.api.layer1.data.BalanceInfo;
 import velox.api.layer1.data.BalanceInfo.BalanceInCurrency;
 import velox.api.layer1.data.ExecutionInfoBuilder;
+import velox.api.layer1.data.ExtendedLoginData;
 import velox.api.layer1.data.Layer1ApiProviderSupportedFeatures;
 import velox.api.layer1.data.LoginData;
 import velox.api.layer1.data.LoginFailedReason;
@@ -70,7 +73,6 @@ import velox.api.layer1.data.OrderUpdateParameters;
 import velox.api.layer1.data.SimpleOrderSendParameters;
 import velox.api.layer1.data.SubscribeInfo;
 import velox.api.layer1.data.SystemTextMessageType;
-import velox.api.layer1.data.UserPasswordDemoLoginData;
 
 /**
  * @author aris
@@ -130,38 +132,27 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 			.build();
 	}
 	
-	   @Override
-	    public void login(LoginData loginData) {
-	        UserPasswordDemoLoginData userPasswordDemoLoginData = (UserPasswordDemoLoginData) loginData;
-	        
-	        if (userPasswordDemoLoginData.user.isEmpty() || userPasswordDemoLoginData.password.isEmpty()) {
-	            adminListeners.forEach(l -> l.onLoginFailed(
-	                    LoginFailedReason.WRONG_CREDENTIALS,
-	                    "Login or/and password field is empty")
-	                );
-	            return;
-	        }
-	        
-	        String[] splits = userPasswordDemoLoginData.user.split("::");
-	        try {
-	            assert splits.length == 2;
-	            apiKey = splits[0];
-	            passPhraze = splits[1];
-	            secretKey = userPasswordDemoLoginData.password;
-	        } catch (Exception e) {
-	            Log.info("Could not login.", e);
-	            adminListeners.forEach(l -> l.onLoginFailed(
-	                LoginFailedReason.WRONG_CREDENTIALS,
-	                INVALID_USERNAME_PASSWORD)
-	            );
-	            return;
-	        }
+    @Override
+    public void login(LoginData loginData) {
+        ExtendedLoginData extendedLoginData = (ExtendedLoginData) loginData;
+        Map<String, CredentialsSerializationField> credentialsMap = extendedLoginData.extendedData;
 
-	        // If connection process takes a while then it's better to do it in
-	        // separate thread
-	        connectionThread = new Thread(() -> handleLogin());
-	        connectionThread.start();
-	    }
+        this.apiKey = credentialsMap.get(Constants.API_KEY_FIELD_NAME).getStringValue();
+        this.secretKey = credentialsMap.get(Constants.API_SECRET_FIELD_NAME).getStringValue();
+        this.passPhraze = credentialsMap.get(Constants.API_PASSPHRASE_FIELD_NAME).getStringValue();
+        boolean isTradingEnabled = Boolean.valueOf(
+                extendedLoginData.extendedData.get(Constants.ENABLE_TRADING_CHECKBOX_NAME).getStringValue());
+        boolean areCredentialsProvided = StringUtils.isNoneBlank(apiKey, secretKey, passPhraze);
+
+        if (isTradingEnabled && !areCredentialsProvided) {
+            adminListeners.forEach(l -> l.onLoginFailed(
+                    LoginFailedReason.WRONG_CREDENTIALS,
+                    "Credentials field is empty"));
+            return;
+        }
+        connectionThread = new Thread(() -> handleLogin());
+        connectionThread.start();
+    }
 
     private void handleLogin() {
         Log.info("Logging in to OKEX");

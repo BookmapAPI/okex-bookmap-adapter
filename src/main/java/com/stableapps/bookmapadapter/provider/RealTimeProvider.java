@@ -48,14 +48,12 @@ import velox.api.layer1.data.InstrumentInfo;
 import velox.api.layer1.data.Layer1ApiProviderSupportedFeatures;
 import velox.api.layer1.data.Layer1ApiProviderSupportedFeaturesBuilder;
 import velox.api.layer1.data.LoginData;
-import velox.api.layer1.data.LoginFailedReason;
 import velox.api.layer1.data.OrderSendParameters;
 import velox.api.layer1.data.OrderUpdateParameters;
 import velox.api.layer1.data.StatusInfo;
 import velox.api.layer1.data.SubscribeInfo;
 import velox.api.layer1.data.SubscribeInfoCrypto;
 import velox.api.layer1.data.TradeInfo;
-import velox.api.layer1.data.UserPasswordDemoLoginData;
 import velox.api.layer1.layers.utils.OrderBook;
 import velox.api.layer1.layers.utils.OrderByOrderBook;
 
@@ -66,10 +64,6 @@ import velox.api.layer1.layers.utils.OrderByOrderBook;
  */
 
 public class RealTimeProvider extends ExternalLiveBaseProvider {
-
-	protected static final String INVALID_USERNAME_PASSWORD = "Please provide "
-		+ "apiKey::passPhraze for username and secretKey for"
-		+ " password.\nIf you do not want to trade you should connect using OKEx Demo instead\"";
 	
 	public static final int DEFAULT_MARKET_DEPTH_AMOUNT = 20;
 	public static final double FUTURES_GENERIC_MIN_SIZE = 0.001; 
@@ -213,25 +207,11 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
 
 	@Override
 	public void login(LoginData loginData) {
-        UserPasswordDemoLoginData userPasswordDemoLoginData = (UserPasswordDemoLoginData) loginData;
-        String user = userPasswordDemoLoginData.user.trim();
-        String password = userPasswordDemoLoginData.password.trim();
-        if (!user.isEmpty() || !password.isEmpty()) {
-            adminListeners.forEach(l -> l.onLoginFailed(
-                    LoginFailedReason.WRONG_CREDENTIALS,
-                    "You have entered credentials. "
-                    + "Note that if you want to trade\nyou should connect using trading provider instead of demo.\n"
-                    + "If you don't, clear your credentials please.")
-                );
-            return;
-        }
-        
         if (!(this instanceof RealTimeTradingProvider)) {
             if (getConnector().session == null) {
                 getConnector().connect();
             }
         }
-
         adminListeners.forEach(Layer1ApiAdminListener::onLoginSuccessful);
 	}
 

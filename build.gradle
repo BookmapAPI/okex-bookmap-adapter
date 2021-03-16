@@ -8,9 +8,9 @@ plugins {
 }
 
 def okexName = 'okex-adapter'
-def okexVersion = 'alpha-0.1.4.14'
+def okexVersion = 'alpha-0.1.4.15'
 def okcoinName = 'okcoin-adapter'
-def okcoinVersion = 'alpha-1.0.0.10'
+def okcoinVersion = 'alpha-1.0.0.11'
 
 repositories {
     mavenCentral()
@@ -29,9 +29,6 @@ dependencies {
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.2.1'
     implementation group: 'com.fasterxml.jackson.jaxrs', name: 'jackson-jaxrs-json-provider', version: '2.2.1'
     implementation group: 'org.glassfish.tyrus', name: 'tyrus-client', version: '1.15'
-//this one is temp until api core lib is available with the Layer1ApiPublicInterface 
-    compileOnly fileTree(dir: 'lib', include: '*.jar')
-    
     implementation 'org.glassfish.tyrus:tyrus-container-grizzly-client:1.15'
     implementation 'javax.ws.rs:javax.ws.rs-api:2.1.1'
     implementation 'org.java-websocket:Java-WebSocket:1.3.9'
@@ -39,10 +36,11 @@ dependencies {
     implementation 'org.glassfish.jersey.core:jersey-client:2.27'
     implementation 'org.glassfish.jersey.inject:jersey-hk2:2.28'
     implementation 'commons-codec:commons-codec:1.12'
-    compileOnly 'com.google.code.gson:gson:2.4'
     implementation 'org.apache.commons:commons-compress:1.16'
-    compileOnly 'org.projectlombok:lombok:1.18.12'
     annotationProcessor 'org.projectlombok:lombok:1.18.12'
+    compileOnly 'org.projectlombok:lombok:1.18.12'
+    compileOnly 'com.google.code.gson:gson:2.4'
+    compileOnly group: 'com.bookmap.api', name: 'api-core', version: '7.1.0.50'
 }
 
 group = 'com.stableapps'
