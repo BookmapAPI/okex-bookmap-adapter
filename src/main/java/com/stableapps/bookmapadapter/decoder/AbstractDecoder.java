@@ -40,9 +40,6 @@ public abstract class AbstractDecoder<T> implements Decoder.Binary<T> {
             while (-1 != (offset = zin.read(buffer))) {
                 out.write(buffer, 0, offset);
             }
-            
-            tempPrintOutputToLog(out.toString());
-            
             return out.toString();
         } catch (final IOException e) {
             throw new RuntimeException(e);
@@ -62,7 +59,6 @@ public abstract class AbstractDecoder<T> implements Decoder.Binary<T> {
 	}
 	
 	public T decode(String arg0) throws DecodeException {
-//		System.out.println("\n\nResponse:\n"+arg0);
 		try {
 			if (arg0.startsWith("[")) {
 				arg0 = arg0.substring(1, arg0.length() - 1);
@@ -88,27 +84,5 @@ public abstract class AbstractDecoder<T> implements Decoder.Binary<T> {
 
 	@Override
 	public void destroy() {
-	}
-
-	private static void tempPrintOutputToLog(String output) {
-	    String newString = output.toString();
-//	    velox.api.layer1.common.Log.info(newString);
-        if (
-                !newString.equals(string)
-                &&
-//                (newString.contains("account")
-//                        || newString.contains("position"))
-                
-//        
-                newString.contains("depth")
-//                && newString.contains("partial")
-//                && !newString.contains("trade")
-//                && !newString.contains("order")
-//                && !newString.equals("pong")
-               
-                ) {
-            string = newString;
-//        velox.api.layer1.common.Log.info("UNIQUE " + count++ + " " + string);
-        }
 	}
 }
