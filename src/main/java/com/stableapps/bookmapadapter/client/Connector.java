@@ -1306,4 +1306,8 @@ public class Connector extends Endpoint implements AutoCloseable {
 			return delay;
 		}
 	}
+
+	public String getLoginResponseMessage() {
+	    return loginResponse == null ? "" : loginResponse.getMessage();
+	}
 }

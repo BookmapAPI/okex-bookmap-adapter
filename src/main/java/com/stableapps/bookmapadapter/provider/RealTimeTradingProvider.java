@@ -163,22 +163,21 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 	        connectionThread.start();
 	    }
 
-	    private void handleLogin() {
-	        Log.info("Logging in to OKEX");
-	        boolean isValid = getNewConnector().wslogin();
+    private void handleLogin() {
+        Log.info("Logging in to OKEX");
+        boolean isValid = getNewConnector().wslogin();
 
-	        if (isValid) {
-	            Log.info("Login to OKEX successful");
-	            adminListeners.forEach(Layer1ApiAdminListener::onLoginSuccessful);
-	        } else {
-	            Log.info("Login to OKEX failed");
-	            adminListeners.forEach(l -> l.onLoginFailed(
-	                LoginFailedReason.WRONG_CREDENTIALS,
-	                INVALID_USERNAME_PASSWORD)
-	            );
-	        }
-
-	    }
+        if (isValid) {
+            Log.info("Login to OKEX successful");
+            adminListeners.forEach(Layer1ApiAdminListener::onLoginSuccessful);
+        } else {
+            Log.info("Login to OKEX failed");
+            adminListeners.forEach(l -> l.onLoginFailed(
+                    LoginFailedReason.WRONG_CREDENTIALS,
+                    connector.getLoginResponseMessage()));
+            close();
+        }
+    }
 
 	@Override
 	protected void onConnectionRestored() {
