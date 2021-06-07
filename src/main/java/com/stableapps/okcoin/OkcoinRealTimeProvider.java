@@ -17,15 +17,17 @@ public class OkcoinRealTimeProvider extends RealTimeProvider {
 
     @Override
     protected void getInstruments() {
-        try {
-            String spotContent = Connector.getServerResponse(Utils.getMarketInstruments(Market.spot, exchange));
-            InstrumentSpot[] spots = objectMapper.readValue(spotContent, InstrumentSpot[].class);
-            for (InstrumentSpot spot : spots) {
-                knownInstruments.add(new SubscribeInfo(spot.getInstrumentId(), "", "spot"));
-                genericInstruments.put("spot@" + spot.getInstrumentId(), spot);
+        if (subscribeInfos.isEmpty() || genericInstruments.isEmpty()) {
+            try {
+                String spotContent = Connector.getServerResponse(Utils.getMarketInstruments(Market.SPOT, exchange));
+                InstrumentSpot[] spots = objectMapper.readValue(spotContent, InstrumentSpot[].class);
+                for (InstrumentSpot spot : spots) {
+                    subscribeInfos.add(new SubscribeInfo(spot.getInstrumentId(), "", Market.SPOT.toString()));
+                    genericInstruments.put(Market.SPOT.toString() + "@" + spot.getInstrumentId(), spot);
+                }
+            } catch (Exception e) {
+                Log.warn("Spot instruments have not been loaded", e);
             }
-        } catch (Exception e) {
-            Log.warn("Spot instruments have not been loaded", e);
         }
     }
 

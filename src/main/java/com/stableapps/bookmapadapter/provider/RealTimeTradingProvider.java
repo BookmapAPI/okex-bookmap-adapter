@@ -29,10 +29,10 @@ import com.stableapps.bookmapadapter.model.FutureAccountsContractFixedMargin;
 import com.stableapps.bookmapadapter.model.FuturesAccount;
 import com.stableapps.bookmapadapter.model.FuturesPosition;
 import com.stableapps.bookmapadapter.model.FuturesPositionsOfCurrencyResponse;
-import com.stableapps.bookmapadapter.model.OrderTypeFuturesOrSwap;
 import com.stableapps.bookmapadapter.model.OrderData;
 import com.stableapps.bookmapadapter.model.OrderDataFutures;
 import com.stableapps.bookmapadapter.model.OrderDataSpot;
+import com.stableapps.bookmapadapter.model.OrderTypeFuturesOrSwap;
 import com.stableapps.bookmapadapter.model.OrdersFuturesList;
 import com.stableapps.bookmapadapter.model.SpotAccount;
 import com.stableapps.bookmapadapter.model.SubscribeFuturesAccountResponse;
@@ -49,6 +49,7 @@ import com.stableapps.bookmapadapter.model.rest.PlaceOrderRequestTokenOrMargin;
 import com.stableapps.bookmapadapter.model.rest.PlaceOrderResponse;
 import com.stableapps.bookmapadapter.rest.RestClient;
 import com.stableapps.bookmapadapter.util.Constants;
+import com.stableapps.bookmapadapter.util.Constants.Market;
 import com.stableapps.bookmapadapter.util.Utils;
 
 import lombok.Data;
@@ -247,8 +248,8 @@ public class RealTimeTradingProvider extends RealTimeProvider {
         String instrumentType = alias.substring(0, alias.indexOf('@'));
         String symbol = alias.substring(alias.indexOf('@') + 1);
 
-        switch (instrumentType) {
-        case "spot":
+        switch (Market.valueOf(instrumentType)) {
+        case SPOT:
             PlaceOrderRequestTokenOrMargin spotRequest = new PlaceOrderRequestTokenOrMargin();
             spotRequest.setType("limit");
             spotRequest.setSide(orderInfo.isBuy() ? "buy" : "sell");
@@ -258,22 +259,22 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 
             if (orderInfo.getType() == OrderType.LMT) {
                 spotRequest.setPrice(price);
-                spotRequest.setFloatingPointSize(size * getMinSize(alias));
+                spotRequest.setFloatingPointSize(size / getSizeMultiplier(alias));
             } else if (orderInfo.getType() == OrderType.MKT) {
-                spotRequest.setFloatingPointSize(size * getMinSize(alias));
+                spotRequest.setFloatingPointSize(size / getSizeMultiplier(alias));
                 int bestPrice = ((OkexClient) connector.client).getBestPrice(orderInfo.isBuy(), alias);
                 spotRequest.setPrice(bestPrice);
             }
 
             orderRequest = spotRequest;
             break;
-        case "margin":
+        case MARGIN:
             PlaceOrderRequestTokenOrMargin marginRequest = new PlaceOrderRequestTokenOrMargin();
             marginRequest.setType(orderInfo.getType().equals(OrderType.MKT) ? "market" : "limit");
             marginRequest.setMarginTrading(2);
             orderRequest = marginRequest;
             break;
-        case "futures":
+        case FUTURES:
             PlaceOrderRequestFuturesOrSwap futures = new PlaceOrderRequestFuturesOrSwap();
             futures.setType(orderInfo.isBuy() ? "1" : "2");
             futures.setInstrumentId(symbol);
@@ -316,7 +317,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
         int positionShort = 0;
         boolean isCodirectionalWithPosition = true;
 
-        if (instrumentType.equals("futures")) {
+        if (instrumentType.equals(Market.FUTURES.toString())) {
             positionLong = positionsMap.get(alias).getRight();
             positionShort = positionsMap.get(alias).getLeft();
             isCodirectionalWithPosition = positionsMap.get(alias) == null || positionShort == positionLong
@@ -324,7 +325,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                     || orderInfo.isBuy() && positionLong > positionShort;
         }
 
-        if (instrumentType.equals("futures") && orderInfo.getType() == OrderType.MKT && !isCodirectionalWithPosition) {
+        if (instrumentType.equals(Market.FUTURES.toString()) && orderInfo.getType() == OrderType.MKT && !isCodirectionalWithPosition) {
 
             if (size == Math.abs(positionLong - positionShort)) {
 
@@ -422,9 +423,9 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 		        String body = "{\"client_oid\":\"" + id + "\", \"instrument_id\":\"" + symbol + "\"}";
 				String path = "";
 				
-				if (type.equals("spot")) {
+				if (Market.valueOf(type) == Market.SPOT) {
 				    path = "/api/spot/v3/cancel_orders/";
-				} else if (type.equals("futures")) {
+				} else if (Market.valueOf(type) == Market.FUTURES) {
                     path = "/api/futures/v3/cancel_order/" + symbol + "/";
                 }
 				connector.restClient.call(path + id, body, String.class, apiKey, secretKey, connector.passPhraze);
@@ -444,9 +445,9 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 
             if (order instanceof OrderDataSpot) {
                 isBuy = ((OrderDataSpot) order).getSide().equals("buy");
-                order.setInstrumentType("spot");
+                order.setInstrumentType(Market.SPOT.toString());
             } else if (order instanceof OrderDataFutures) {
-                order.setInstrumentType("futures");
+                order.setInstrumentType(Market.FUTURES.toString());
                 OrderDataFutures futures = (OrderDataFutures) order;
 
                 if (futures.getType().equals("1") || futures.getType().equals("4")) {
@@ -476,7 +477,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                 order.setClientOid(order.getOrderId());
 
                 if (order instanceof OrderDataSpot) {
-                    newBuilder.setUnfilled((int) Math.round(order.getSize() / RealTimeProvider.getMinSize(alias)));
+                    newBuilder.setUnfilled((int) (Math.round(order.getSize() * getSizeMultiplier(alias))));
                 }
                 if (order instanceof OrderDataFutures) {
                     newBuilder
@@ -506,9 +507,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                 infoLocal.setInstrumentAlias(alias);
                 return infoLocal;
                 });
-            int buyOpenOrders = info.getWorkingBuys();
-            int sellOpenOrders = info.getWorkingSells();
-            
+                        
             switch (order.getState()) {
             case -2:// previous API "rejected" current API "failed"
                 orderInfo = bmIdSentOrders.get(order.getClientOid());
@@ -532,12 +531,6 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                 clientOidToOrderId.put(order.getClientOid(), orderInfo.getOrderId());
                 orderIdToClientOid.put(orderInfo.getOrderId(), order.getClientOid());
                 bmIdWorkingOrders.put(order.getClientOid(), orderInfo);
-                
-                if (isBuy) {
-                    info.setWorkingBuys(++buyOpenOrders);
-                } else {
-                    info.setWorkingSells(++sellOpenOrders);
-                }
                 break;
             case -1:// "cancelled"
                 orderInfo = bmIdWorkingOrders.get(order.getClientOid());
@@ -549,23 +542,16 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                 update = orderInfo.build();
                 tradingListeners.forEach(l -> l.onOrderUpdated(update));
                 orderInfo.markAllUnchanged();
-                
-                if (isBuy) {
-                    info.setWorkingBuys(--buyOpenOrders);
-                } else {
-                    info.setWorkingSells(--sellOpenOrders);
-                }
                 break;
             case 2:// "fully filled"
                 orderInfo = bmIdWorkingOrders.get(order.getClientOid());
                 Log.info("Order filled");
                 orderInfo.setUnfilled(0);
-                if (order.getInstrumentType().equals("spot")) {
-                    orderInfo.setFilled((int) Math.round(order.getSize()/getMinSize(alias)));
+                if (order.getInstrumentType().equals(Market.SPOT.toString())) {
+                    orderInfo.setFilled((int) Math.round(order.getSize() * getSizeMultiplier(alias)));
                 } else {
                     orderInfo.setFilled((int) order.getSize());// !!!!!!!!!!! size is fp, turn to integer
                 }
-                
                 orderInfo.setStatus(OrderStatus.FILLED);
                 orderInfo.setAverageFillPrice(order.getLastFillPx());
                 update = orderInfo.build();
@@ -579,12 +565,6 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                         orderInfo.getFilled(), orderInfo.getAverageFillPrice(), execId, System.currentTimeMillis(),
                         false);
                 tradingListeners.forEach(l -> l.onOrderExecuted(executionInfoBuilder.build()));
-
-                if (isBuy) {
-                    info.setWorkingBuys(--buyOpenOrders);
-                } else {
-                    info.setWorkingSells(--sellOpenOrders);
-                }
                 break;
             case 4:// cancel in process
                 Log.info("Order Cancel In Process");
@@ -596,6 +576,23 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 //				case PartiallyFilled: not implemented
 //				case Unfilled: not implemented
             }
+            
+            int workingBuys = bmIdWorkingOrders.values()
+                    .parallelStream()
+                    .filter(e -> e.getInstrumentAlias().equals(alias))
+                    .filter(e -> e.getStatus() == OrderStatus.WORKING)
+                    .filter(e -> e.isBuy())
+                    .mapToInt(e -> e.getUnfilled())
+                    .sum();
+            int workingSells = bmIdWorkingOrders.values()
+                    .parallelStream()
+                    .filter(e -> e.getInstrumentAlias().equals(alias))
+                    .filter(e -> e.getStatus() == OrderStatus.WORKING)
+                    .filter(e -> !e.isBuy())
+                    .mapToInt(e -> e.getUnfilled())
+                    .sum();
+            info.setWorkingBuys(workingBuys);
+            info.setWorkingSells(workingSells);
             updateStatus(info);
         }
     }
@@ -656,31 +653,26 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                         Double.NaN, // previousDayBalance,
                         Double.NaN, // netLiquidityValue
                         currency, null);// rateToBase)
-
                 tradingListeners.forEach(l -> l.onBalance(new BalanceInfo(Collections.singletonList(balance))));
             }
 
             if (currenciesForSpotPosition.containsKey(currency)) {
-
                 Set<String> aliases = currenciesForSpotPosition.get(currency);
 
                 for (String alias : aliases) {
-
-                    String baseCurrency = ((InstrumentSpot) genericInstruments.get(alias)).getBaseCurrency();
                     double minSize = ((InstrumentSpot) genericInstruments.get(alias)).getMinSize();
 
                     aliasedStatusInfos.computeIfAbsent(alias, v -> {
                         StatusInfoLocal infoLocal = new StatusInfoLocal();
                         infoLocal.setInstrumentAlias(alias);
-                        infoLocal.setCurrency(Double.valueOf(minSize) + " " + baseCurrency);
+                        infoLocal.setCurrency(getPositionCurrency(genericInstruments.get(alias)));
                         return infoLocal;
                         });
                     StatusInfoLocal info = aliasedStatusInfos.computeIfPresent(alias, (k, v) -> {
                         v.setPosition((int) Math.round(account.getAvailable() / minSize));
-                        v.setCurrency(Double.valueOf(minSize) + " " + baseCurrency);
+                        v.setCurrency(getPositionCurrency(genericInstruments.get(alias)));
                         return v;
                         });
-
                     updateStatus(info);
                 }
             }
@@ -698,7 +690,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
             if (subscribeInfo == null) {
                 Log.info("subscribeInfo is null");
             } else {
-                String type = subscribeInfo.type.toLowerCase();
+                String type = subscribeInfo.type;
                 String symbol = subscribeInfo.symbol;
                 String alias = type + "@" + symbol;
                 Log.info("Cannot be subscribed to " + alias);
@@ -708,26 +700,26 @@ public class RealTimeTradingProvider extends RealTimeProvider {
     }
 
     public void getSubscribed(SubscribeInfo subscribeInfo) {
-            String type = subscribeInfo.type.toLowerCase();
+            String type = subscribeInfo.type.toUpperCase();
+            Market market = Market.valueOf(type);
             String symbol = subscribeInfo.symbol;
-            String alias = type + "@" + symbol;
+            String alias = market.toString() + "@" + symbol;
 
             singleThreadExecutor.execute(() -> {
                 synchronized (aliasInstruments) {
-                    getConnector().subscribeOrder(symbol, type);
+                    getConnector().subscribeOrder(symbol, market);
 
-                    if (type.equals("futures")) {
+                    if (market == Market.FUTURES) {
                         refreshFuturesPosition(alias);
 
-                        getConnector().subscribePositionFutures(symbol, type);
+                        getConnector().subscribePositionFutures(symbol, market);
                         String underlyingIndex = ((InstrumentFutures) genericInstruments.get(alias))
                                 .getUnderlyingIndex();
                         refreshFuturesAccount(underlyingIndex);
 
-                        getConnector().TEMPsubscribeAccount(symbol, type, underlyingIndex);
+                        getConnector().TEMPsubscribeAccount(symbol, market, underlyingIndex);
 
-                    } else if (type.equals("spot")) {
-
+                    } else if (market == Market.SPOT) {
                         refreshBalance(alias);
 
                         String baseCurrency = ((InstrumentSpot) genericInstruments.get(alias)).getBaseCurrency();
@@ -745,8 +737,8 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                             return v;
                         });
 
-                        getConnector().TEMPsubscribeAccount(symbol, type, baseCurrency);
-                        getConnector().TEMPsubscribeAccount(symbol, type, quoteCurrency);
+                        getConnector().TEMPsubscribeAccount(symbol, market, baseCurrency);
+                        getConnector().TEMPsubscribeAccount(symbol, market, quoteCurrency);
                     }
 
                     refreshOrders(alias);
@@ -762,9 +754,9 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 
         int at = alias.indexOf('@');
         String symbol = alias.substring(at + 1);
-        String type = alias.substring(0, at);
+        Market market = Market.valueOf(alias.substring(0, at));
 
-        getConnector().TEMPunsubscribeOrder(symbol, type);
+        getConnector().TEMPunsubscribeOrder(symbol, market);
 
         if (genericInstruments.get(alias) instanceof InstrumentSpot) {
 
@@ -787,7 +779,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
     private void refreshBalance(String alias) {
         String type = Utils.getTypeFromALias(alias);
 
-        if (type.equals("spot")) {
+        if (type.equals(Market.SPOT.toString())) {
             AccountSpot[] accounts;
             try (RestClient restClient = new RestClient(apiKey, secretKey, exchange)) {
                 accounts = restClient.customCall("/api/spot/v3/accounts", "GET", "", AccountSpot[].class, apiKey,
@@ -816,7 +808,8 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 
             tradingListeners.forEach(l -> l.onBalance(new BalanceInfo(Collections.singletonList(balance))));
 
-            String baseCurrency = ((InstrumentSpot) genericInstruments.get(alias)).getBaseCurrency();
+            InstrumentGeneric generic = genericInstruments.get(alias);
+            String baseCurrency = generic.getBaseCurrency();
             AccountSpot baseCurrencyAccount = accountsMap.get(baseCurrency);
 
             double baseCurrencyBalance = 0.0;
@@ -829,18 +822,18 @@ public class RealTimeTradingProvider extends RealTimeProvider {
             aliasedStatusInfos.computeIfAbsent(alias, v -> {
                 StatusInfoLocal infoLocal = new StatusInfoLocal();
                 infoLocal.setInstrumentAlias(alias);
-                infoLocal.setCurrency(Double.valueOf(minSize) + " " + baseCurrency);
+                infoLocal.setCurrency(getPositionCurrency(genericInstruments.get(alias)));
                 return infoLocal;
                 });
             StatusInfoLocal info = aliasedStatusInfos.computeIfPresent(alias, (k, v) -> {
                 v.setPosition((int) Math.round(baseCurrencyBalanceFinal / minSize));
-                v.setCurrency(Double.valueOf(minSize) + " " + baseCurrency);
+                v.setCurrency(getPositionCurrency(generic));
                 return v;
                 });
 
             updateStatus(info);
             
-        } else if (type.equals("futures")) {
+        } else if (type.equals(Market.FUTURES.toString())) {
 
             String accountsResponse;
             InstrumentGeneric generic = genericInstruments.get(alias);
@@ -894,7 +887,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
         String instrumentId = Utils.getInstrumentIdFromALias(alias);
 
         if (this instanceof RealTimeTradingProvider) {
-            if (type.equals("spot")) {
+            if (type.equals(Market.SPOT.toString())) {
                 List<Map.Entry<String, String>> params = new ArrayList<>();
                 params.add(new AbstractMap.SimpleEntry<String, String>("instrument_id", instrumentId));
                 params.add(new AbstractMap.SimpleEntry<String, String>("status", "open"));
@@ -917,7 +910,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
                 }
             }
 
-            if (type.equals("futures")) {
+            if (type.equals(Market.FUTURES.toString())) {
                 OrdersFuturesList ordersFutures;
                 String path = "/api/futures/v3/orders/" + instrumentId;
 
@@ -947,7 +940,7 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 	    private void refreshFuturesPosition(String alias) {
 	        String type = Utils.getTypeFromALias(alias);
 	        
-	        if (!type.equals("futures")) return;
+	        if (!type.equals(Market.FUTURES.toString())) return;
 	        
 	        String instrumentId = Utils.getInstrumentIdFromALias(alias);
 	        
@@ -996,35 +989,27 @@ public class RealTimeTradingProvider extends RealTimeProvider {
 	    if (data == null) return;
 
         for (FuturesPosition position : data) {
-
             int qty = (int) Math.round(-position.getShortAvailQty() + position.getLongAvailQty());
-
             double avrPrice = Math.abs((-position.getShortAvgCost() * position.getShortAvailQty()
                     + position.getLongAvgCost() * position.getLongAvailQty()) / (double) qty);
-
-            String alias = "futures@" + position.getInstrumentId();
-
-            InstrumentFutures instrument = (InstrumentFutures) genericInstruments.get(alias);
-            String currency = "contract worth " + instrument.getContractVal() + " " + instrument.getQuoteCurrency();
+            String alias = Market.FUTURES.toString() + "@" + position.getInstrumentId();
 
             double unrealizedPnl = getUpdatedUnrealizedPnl(alias, qty, avrPrice);
 
             aliasedStatusInfos.computeIfAbsent(alias, v -> {
                 StatusInfoLocal infoLocal = new StatusInfoLocal();
                 infoLocal.setInstrumentAlias(alias);
-                infoLocal.setCurrency(currency);
+                infoLocal.setCurrency(getPositionCurrency(genericInstruments.get(alias)));
                 return infoLocal;
             });
             StatusInfoLocal info = aliasedStatusInfos.computeIfPresent(alias, (k, v) -> {
                 v.setPosition(qty);
                 v.setUnrealizedPnl(unrealizedPnl);
                 v.setRealizedPnl(position.getRealizedPnl());
-                v.setCurrency(currency);
+                v.setCurrency(getPositionCurrency(genericInstruments.get(alias)));
                 return v;
             });
-
             updateStatus(info);
-
             positionsMap.put(alias, Pair.of((int) position.getShortAvailQty(), (int) position.getLongAvailQty()));
         }
     }
@@ -1115,4 +1100,13 @@ public class RealTimeTradingProvider extends RealTimeProvider {
         });
     }
 
+    private String getPositionCurrency(InstrumentGeneric instrument) {
+        if (instrument instanceof InstrumentFutures) {
+            InstrumentFutures futures = (InstrumentFutures) instrument;
+            if (!futures.getBaseCurrency().equals(futures.getContractValCurrency())) {
+                return futures.getContractVal() + " " + futures.getQuoteCurrency(); 
+            }
+        }
+        return instrument.getBaseCurrency();
+    }
 }

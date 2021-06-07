@@ -103,6 +103,7 @@ import com.stableapps.bookmapadapter.model.UnsubscribeResponse;
 import com.stableapps.bookmapadapter.model.rest.PlaceOrderRequest;
 import com.stableapps.bookmapadapter.model.rest.PlaceOrderResponse;
 import com.stableapps.bookmapadapter.rest.RestClient;
+import com.stableapps.bookmapadapter.util.Constants.Market;
 
 import velox.api.layer1.Layer1ApiAdminListener;
 import velox.api.layer1.common.Log;
@@ -328,7 +329,8 @@ public class Connector extends Endpoint implements AutoCloseable {
 	** This will received the latest OKEX Contract Data. 
 	 */
 	
-	public boolean subscribeTrade(String symbol, String type) {
+	public boolean subscribeTrade(String symbol, Market market) {
+	    String type = market.toString().toLowerCase();
 	    try {
             LinkedHashMap<String, Object> params = new LinkedHashMap<>();
             params.put("op", "subscribe");
@@ -354,7 +356,8 @@ public class Connector extends Endpoint implements AutoCloseable {
         }
 	}
 	
-	public boolean subscribeOrder(String symbol, String type) {
+	public boolean subscribeOrder(String symbol, Market market) {
+	    String type = market.toString().toLowerCase();
 	    try {
 	        LinkedHashMap<String, Object> params = new LinkedHashMap<>();
 	        params.put("op", "subscribe");
@@ -396,7 +399,8 @@ public class Connector extends Endpoint implements AutoCloseable {
 	    }
 	}
 	
-	public void subscribeAccount(String symbol, String type) {
+	public void subscribeAccount(String symbol, Market market) {
+        String type = market.toString().toLowerCase();
 	    try {
 	        LinkedHashMap<String, Object> params = new LinkedHashMap<>();
 	        params.put("op", "subscribe");
@@ -430,7 +434,8 @@ public class Connector extends Endpoint implements AutoCloseable {
 	    }
 	}
 	
-	public void subscribePositionFutures(String symbol, String type) {
+	public void subscribePositionFutures(String symbol, Market market) {
+	    String type = market.toString().toLowerCase();
 	    try {
 	        LinkedHashMap<String, Object> params = new LinkedHashMap<>();
 	        params.put("op", "subscribe");
@@ -460,7 +465,8 @@ public class Connector extends Endpoint implements AutoCloseable {
 	    }
 	}
 	
-	public boolean TEMPsubscribeAccount(String symbol, String type, String baseCurrency) {
+	public boolean TEMPsubscribeAccount(String symbol, Market market, String baseCurrency) {
+	    String type = market.toString().toLowerCase();
 	    try {
 	        LinkedHashMap<String, Object> params = new LinkedHashMap<>();
 	        params.put("op", "subscribe");
@@ -498,7 +504,8 @@ public class Connector extends Endpoint implements AutoCloseable {
 	    }
 	}
 	
-	public boolean TEMPunsubscribeOrder(String symbol, String type) {
+	public boolean TEMPunsubscribeOrder(String symbol, Market market) {
+	    String type = market.toString().toLowerCase();
 	    try {
 	        LinkedHashMap<String, Object> params = new LinkedHashMap<>();
 	        params.put("op", "unsubscribe");
@@ -540,7 +547,8 @@ public class Connector extends Endpoint implements AutoCloseable {
 	    }
 	}
 
-	public boolean subscribeContractMarketDepthIncremental(String symbol, String type) {
+	public boolean subscribeContractMarketDepthIncremental(String symbol, Market market) {
+	    String type = market.toString().toLowerCase();
         try {
             LinkedHashMap<String, Object> params = new LinkedHashMap<>();
             params.put("op", "subscribe");
@@ -566,7 +574,8 @@ public class Connector extends Endpoint implements AutoCloseable {
         }
     }
 
-	public boolean unsubscribeContractMarketDepthFull(String symbol, String type) {
+	public boolean unsubscribeContractMarketDepthFull(String symbol, Market market) {
+        String type = market.toString().toLowerCase();
 		try {
 		    LinkedHashMap<String, Object> params = new LinkedHashMap<>();
             params.put("op", "unsubscribe");
@@ -591,7 +600,8 @@ public class Connector extends Endpoint implements AutoCloseable {
 		}
 	}
 	
-	public boolean unsubscribeTrade(String symbol, String type) {
+	public boolean unsubscribeTrade(String symbol, Market market) {
+        String type = market.toString().toLowerCase();
 	    try {
 	        LinkedHashMap<String, Object> params = new LinkedHashMap<>();
 	        params.put("op", "unsubscribe");
@@ -851,7 +861,7 @@ public class Connector extends Endpoint implements AutoCloseable {
 		    SubscribeContractMarketDepthResponse response = ((SubscribeContractMarketDepthResponse)t);
 		    int i = response.table.indexOf('/');
 		    String type = response.table.substring(0, i);
-		    response.alias = type + "@" + response.data.instrument_id;
+		    response.alias = type.toUpperCase() + "@" + response.data.instrument_id;
 			setSubscribeContractMarketDepthResponse(response);
 		} else if (t instanceof SubscribeContractTradeRecordInitialResponse) {
 			setSubscribeContractTradeRecordInitialResponse(
@@ -860,7 +870,7 @@ public class Connector extends Endpoint implements AutoCloseable {
 		    SubscribeContractTradeRecordResponse response = (SubscribeContractTradeRecordResponse)t;
 		    int i = response.table.indexOf('/');
             String type = response.table.substring(0, i);
-            response.alias = type + "@" + response.getData().get(0).instrument_id;
+            response.alias = type.toUpperCase() + "@" + response.getData().get(0).instrument_id;
 			setSubscribeContractTradeRecordResponse(response);
 		} else if (t instanceof SubscribeOrderInitialResponse) {
 		    setSubscribeOrderInitialResponse(
@@ -1194,7 +1204,7 @@ public class Connector extends Endpoint implements AutoCloseable {
 
         for (OrderDataSpot order : orders) {
             if (order instanceof OrderDataSpot) {
-                order.setInstrumentType("spot");
+                order.setInstrumentType(Market.SPOT.toString());
             }
             client.onOrder(order);
         }
@@ -1209,7 +1219,7 @@ public class Connector extends Endpoint implements AutoCloseable {
 
         for (OrderDataFutures order : orders) {
             if (order instanceof OrderDataFutures) {
-                order.setInstrumentType("futures");
+                order.setInstrumentType(Market.FUTURES.toString());
             }
             client.onOrder(order);
         }
