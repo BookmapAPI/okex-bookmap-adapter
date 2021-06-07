@@ -13,6 +13,8 @@ public class InstrumentGeneric {
     String instrumentId;
     @JsonProperty("quote_currency")
     String quoteCurrency;
+    @JsonProperty("base_currency")
+    String baseCurrency;
     @JsonProperty("tick_size")
     double tickSize;
 }

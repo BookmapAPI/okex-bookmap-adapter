@@ -35,7 +35,6 @@ public class RelayProvider extends Layer1ApiRelay {
         }
     }
     
-    
     @Override
     public void close() {
         synchronized (lock) {

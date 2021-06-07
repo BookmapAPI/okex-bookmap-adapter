@@ -35,11 +35,11 @@ public class Utils {
     }
     
     public static boolean isSpot(String alias) {
-        return getTypeFromALias(alias).equals("spot");
+        return getTypeFromALias(alias).equals(Market.SPOT.toString());
     }
     
     public static boolean isFutures(String alias) {
-        return getTypeFromALias(alias).equals("futures");
+        return getTypeFromALias(alias).equals(Market.FUTURES.toString());
     }
 
     public static String getMarketInstruments(Market market, String exchange) {
@@ -47,7 +47,7 @@ public class Utils {
         return sb.append("https://www.")
         .append(exchange)
         .append(".com/api/")
-        .append(market)
+        .append(market.toString().toLowerCase())
         .append("/v3/instruments")
         .toString();
     }

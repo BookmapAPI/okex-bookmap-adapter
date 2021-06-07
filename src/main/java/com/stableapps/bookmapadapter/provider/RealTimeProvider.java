@@ -3,9 +3,9 @@ package com.stableapps.bookmapadapter.provider;
 import java.lang.reflect.Field;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,8 +18,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -28,6 +30,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stableapps.bookmapadapter.client.AbstractClient;
 import com.stableapps.bookmapadapter.client.Connector;
 import com.stableapps.bookmapadapter.model.Expiration;
+import com.stableapps.bookmapadapter.model.MarketDepth;
 import com.stableapps.bookmapadapter.model.MarketDepths;
 import com.stableapps.bookmapadapter.model.MarketPrice;
 import com.stableapps.bookmapadapter.model.OrderData;
@@ -35,8 +38,10 @@ import com.stableapps.bookmapadapter.model.SpotAccount;
 import com.stableapps.bookmapadapter.model.SubscribeFuturesAccountResponse;
 import com.stableapps.bookmapadapter.model.SubscribeFuturesPositionResponse;
 import com.stableapps.bookmapadapter.model.Trade;
+import com.stableapps.bookmapadapter.model.rest.InstrumentFutures;
 import com.stableapps.bookmapadapter.model.rest.InstrumentGeneric;
 import com.stableapps.bookmapadapter.model.rest.InstrumentSpot;
+import com.stableapps.bookmapadapter.util.Constants.Market;
 
 import lombok.Data;
 import velox.api.layer0.live.ExternalLiveBaseProvider;
@@ -79,8 +84,9 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
 	protected final ExecutorService singleThreadExecutor;
 	protected final ScheduledExecutorService singleThreadScheduledExecutor;
     protected ObjectMapper objectMapper;
-    protected CopyOnWriteArrayList<SubscribeInfo> knownInstruments = new CopyOnWriteArrayList<>();
-    public static Map<String, InstrumentGeneric> genericInstruments = new HashMap<>();
+    protected CopyOnWriteArrayList<SubscribeInfo> subscribeInfos = new CopyOnWriteArrayList<>();
+    protected Map<String, InstrumentGeneric> genericInstruments = new HashMap<>();
+    protected Map<String, Double> futuresMinSizeCalculated = new HashMap<>();
     protected Map<String, Pair<Double, Double>> pipsSizeMultipliers = new HashMap<>();
     protected Map<String, BalanceInCurrency> balanceMap = new HashMap<>();
     protected Map <String, Pair<Integer, Integer>> positionPairsBySymbol = new HashMap<String, Pair<Integer, Integer>>();
@@ -127,11 +133,11 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
     }
 
     
-    public static double getMinSize(String alias) {
-        return ((InstrumentSpot)genericInstruments.get(alias)).getMinSize();
+    public double getSizeMultiplier(String alias) {
+        return pipsSizeMultipliers.get(alias).getRight();
     }
     
-    public static double getTickSize(String alias) {
+    public double getTickSize(String alias) {
         return genericInstruments.get(alias).getTickSize();
     }
      
@@ -144,21 +150,22 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
         this.wsPortNumber = wsPortNumber;
         this.wsLink = wsLink;
         getInstruments();
+        Log.info("new RealTimeProvider has been created");
     }
 
     protected void updateStatus(StatusInfoLocal info) {
-
         tradingListeners.forEach(l -> l.onStatus(new StatusInfo(info.getInstrumentAlias(), info.getUnrealizedPnl(),
                 info.getRealizedPnl(), info.getCurrency(), info.getPosition(), info.getAveragePrice(), info.getVolume(),
                 info.getWorkingBuys(), info.getWorkingSells())));
     }
 
-	protected boolean subscribeDepthAndTrade(String symbol, String type) {
+	protected boolean subscribeDepthAndTrade(String symbol, Market market) {
+	    String type = market.toString();
         ((OkexClient)getConnector().client).askOrderBooksGranulated.computeIfAbsent(type + "@" + symbol, v ->  new OrderByOrderBook());
         ((OkexClient)getConnector().client).bidOrderBooksGranulated.computeIfAbsent(type + "@" + symbol, v ->  new OrderByOrderBook());
 	    return 
-	            getConnector().subscribeContractMarketDepthIncremental(symbol, type)
-	            && getConnector().subscribeTrade(symbol, type);
+	            getConnector().subscribeContractMarketDepthIncremental(symbol, market)
+	            && getConnector().subscribeTrade(symbol, market);
 	}
 
 	public void reportFuturesUnrealizedPnl(String alias) {
@@ -170,9 +177,9 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
 		synchronized (aliasInstruments) {
             int at = alias.indexOf('@');
             String symbol = alias.substring(at + 1);
-            String type = alias.substring(0, at);
-			getConnector().unsubscribeContractMarketDepthFull(symbol, type);
-			getConnector().unsubscribeTrade(symbol, type);
+            Market market = Market.valueOf(alias.substring(0, at));
+			getConnector().unsubscribeContractMarketDepthFull(symbol, market);
+			getConnector().unsubscribeTrade(symbol, market);
 
 			aliasedStatusInfos.remove(alias);
 
@@ -187,7 +194,16 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
 		// Use default Bookmap price formatting logic for simplicity.
 		// Values returned by this method will be used on price axis and in few
 		// other places.
-	    double pips = pipsSizeMultipliers.get(alias).getLeft();
+	    double pips = 0.0;
+	    try { 
+	        pips = pipsSizeMultipliers.get(alias).getLeft();
+	    } catch (Exception e) {
+	        Log.info(" * * RealTimeProvider formatPrice failed (String alias " + alias);
+	        Log.info(" * * pipsSizeMultipliers ");
+            pipsSizeMultipliers.entrySet().forEach(f -> Log.info(f.getKey() + " " + f.getValue()));
+            Log.info("", e);
+            throw e;
+        }
         return formatPriceDefault(pips, price);
 	}
 
@@ -236,7 +252,6 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
 	}
 
 	public String createAlias(String symbol, Expiration expiration) {
-//		return symbol.toUpperCase() + "_" + expiration.name().toUpperCase();
 		return symbol;
 	}
 
@@ -254,127 +269,74 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
         @Override
         public void onMarketDepth(String symbol, String action, MarketDepths marketDepths) {
             String alias = symbol;
-            double tickSize = pipsSizeMultipliers.get(alias).getLeft();
-            InstrumentGeneric generic = genericInstruments.get(alias);
-            double defaultTickSize = generic.getTickSize();
-            OrderByOrderBook askOrderBookGranulated = askOrderBooksGranulated.get(alias);
-            OrderByOrderBook bidOrderBookGranulated = bidOrderBooksGranulated.get(alias);
 
-            if (action.equals("partial") && !bidOrderBookGranulated.getOrderBook().isEmpty()) {
-                Set<Long> ids = new HashSet<>();
-                ids.addAll(bidOrderBookGranulated.getAllIds());
+            if (action.equals("partial")) {
+                resetOrderBooksOnReconnect(alias, true);
+                resetOrderBooksOnReconnect(alias, false);
+            }
 
-                for (long id : ids) {
-                    Object order = bidOrderBookGranulated.getOrder(id);
+            marketDepths.getAskDatas().forEach(data -> updateOrderBookGranulated(alias, data, false));
+            marketDepths.getBidDatas().forEach(data -> updateOrderBookGranulated(alias, data, true));
+        }
+        
+        
+        private void resetOrderBooksOnReconnect(String alias, boolean isBid) {
+            OrderByOrderBook obob = (isBid ? bidOrderBooksGranulated : askOrderBooksGranulated).get(alias);
+            if (obob.getOrderBook().isEmpty()) return;
 
-                    if (order == null) {
-                        Log.info("order null");
+            Collection<Long> ids = obob.getAllIds();
+
+            for (long id : ids) {
+                Object order = obob.getOrder(id);
+                Field[] fields = order.getClass().getFields();
+                Map<String, Object> objects = new HashMap<>();
+                for (Field field : fields) {
+                    try {
+                        objects.put(field.getName(), field.get(order));
+                    } catch (IllegalArgumentException | IllegalAccessException e) {
+                        throw new RuntimeException();
                     }
-
-                    Field[] fields = order.getClass().getFields();
-                    Map<String, Object> objects = new HashMap<>();
-                    for (Field field : fields) {
-                        try {
-                            objects.put(field.getName(), field.get(order));
-                        } catch (IllegalArgumentException | IllegalAccessException e) {
-                            throw new RuntimeException();
-                        }
-                    }
-
-                    Object priceObj = objects.get("price");
-                    if (priceObj == null) {
-                        priceObj = objects.get("b");
-                    }
-
-                    int price = (int) priceObj;
-                    updateOrderBookGranulated(alias, id, price, 0, true);
                 }
-            }
-            if (action.equals("partial") && !askOrderBookGranulated.getOrderBook().isEmpty()) {
-                Set<Long> ids = new HashSet<>();
-                ids.addAll(askOrderBookGranulated.getAllIds());
-
-                for (long id : ids) {
-                    Object order = askOrderBookGranulated.getOrder(id);
-
-                    Field[] fields = order.getClass().getFields();
-                    Map<String, Object> objects = new HashMap<>();
-
-                    for (Field field : fields) {
-                        try {
-                            objects.put(field.getName(), field.get(order));
-                        } catch (IllegalArgumentException | IllegalAccessException e) {
-                            throw new RuntimeException();
-                        }
-                    }
-                    Object priceObj = objects.get("price");
-
-                    if (priceObj == null) {
-                        priceObj = objects.get("b");
-                    }
-                    int price = (int) priceObj;
-                    updateOrderBookGranulated(alias, id, price, 0, false);
+                //a workaround for an obfuscated order field
+                Object priceObj = objects.get("price");
+                if (priceObj == null) {
+                    priceObj = objects.get("b");
                 }
-            }
 
-            synchronized (askOrderBookGranulated) {
-                marketDepths.getAskDatas().forEach(askData -> {
-                    long realId = (long) Math.round(askData.getPrice() / defaultTickSize);
-
-                    int size;
-                    if (generic instanceof InstrumentSpot) {
-                        size = (int) (askData.getContractAmount() / ((InstrumentSpot) generic).getMinSize());
-
-                        if (size == 0 && (askData.getContractAmount() > ((InstrumentSpot) generic).getMinSize())) {
-                            size = 1;
-                        }
-                    } else {
-                        size = (int) askData.getContractAmount();
-                    }
-                    int price = (int) Math.ceil(askData.getPrice() / tickSize);
-                    boolean isBid = false;
-                    updateOrderBookGranulated(alias, realId, price, size, isBid);
-                });
-            }
-
-            synchronized (bidOrderBookGranulated) {
-                marketDepths.getBidDatas().forEach(bidData -> {
-                    long realId = (long) Math.round(bidData.getPrice() / defaultTickSize);
-                    int size;
-                    if (generic instanceof InstrumentSpot) {
-                        size = (int) (bidData.getContractAmount() / ((InstrumentSpot) generic).getMinSize());
-                        if (size == 0 && (bidData.getContractAmount() > ((InstrumentSpot) generic).getMinSize())) {
-                            size = 1;
-                        }
-
-                    } else {
-                        size = (int) bidData.getContractAmount();
-                    }
-                    int price = (int) Math.floor(bidData.getPrice() / tickSize);
-                    boolean isBid = true;
-                    updateOrderBookGranulated(alias, realId, price, size, isBid);
-                });
+                int price = (int) priceObj;
+                dataListeners.forEach(l -> l.onDepth(alias, isBid, price, 0));
             }
         }
 		
-		private void updateOrderBookGranulated(String alias, long id, int price, int size, boolean isBid) throws IllegalArgumentException {
-		    if (alias == null) {
-		        throw new RuntimeException();
-		    }
-		    OrderByOrderBook orderBook = isBid? bidOrderBooksGranulated.get(alias) : askOrderBooksGranulated.get(alias) ;
+		private void updateOrderBookGranulated(String alias, MarketDepth depth, boolean isBid) {
+            double tickSize = pipsSizeMultipliers.get(alias).getLeft();
+            InstrumentGeneric generic = genericInstruments.get(alias);
+            double defaultTickSize = generic.getTickSize();
+            long id = (long) Math.round(depth.getPrice() / defaultTickSize);
+            
+//            int size = depth.getContractAmount() == 0 ?
+//                    0 : (int) Math.min(depth.getContractAmount() * pipsSizeMultipliers.get(alias).getRight(), 1);
+            int size = (int) (depth.getContractAmount() * pipsSizeMultipliers.get(alias).getRight());
 
-		    if (orderBook.hasOrder(id)) {
-				if (size == 0) {
-					long newSize = orderBook.removeOrder(id);
-     				dataListeners.forEach(l -> l.onDepth(alias, isBid, price, (int)newSize));
-				} else {
-					OrderByOrderBook.OrderUpdateResult updateOrder = orderBook.updateOrder(id, price, size);
-					dataListeners.forEach(l -> l.onDepth(alias, isBid, price, (int)updateOrder.toSize));
-				}
-			} else {
-				long newSize = orderBook.addOrder(id, isBid, price, size);
-				dataListeners.forEach(l -> l.onDepth(alias, isBid, price, (int)newSize));
-			}
+            Function<Double, Double> rounder = isBid? Math::floor : Math::ceil;
+            int price = (int) Math.min(rounder.apply(depth.getPrice() / tickSize), Integer.MAX_VALUE);
+
+            OrderByOrderBook orderBook = isBid? bidOrderBooksGranulated.get(alias) : askOrderBooksGranulated.get(alias) ;
+            long newSize;
+
+            if (orderBook.hasOrder(id)) {
+                if (size == 0) {
+                    newSize = orderBook.removeOrder(id);
+                } else {
+                    OrderByOrderBook.OrderUpdateResult updateOrder = orderBook.updateOrder(id, price, size);
+                    newSize = updateOrder.toSize;
+                }
+            } else {
+                newSize = orderBook.addOrder(id, isBid, price, size);
+            }
+            int absoluteSize = (int) (newSize);
+//          int absoluteSize = (int)(newSize * ((InstrumentSpot) generic).getMinSize());
+            dataListeners.forEach(l -> l.onDepth(alias, isBid, price, absoluteSize));
 		}
 		
 		@Override
@@ -527,19 +489,19 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
     }
 	
     protected boolean isSubscribed(SubscribeInfo subscribeInfo, boolean isPreviousSubscriptionIgnored) {
-        String type = subscribeInfo.type.toLowerCase();
+        String type = subscribeInfo.type.toUpperCase();
         String symbol = subscribeInfo.symbol;
         String exchange = subscribeInfo.exchange;
         String alias = type + "@" + symbol;
 
-        if (knownInstruments.stream()
+        if (subscribeInfos.stream()
                 .filter(instrument -> instrument.type.equals(type))
                 .collect(Collectors.toList()).isEmpty()) {
             Log.info("Type " + type + " not found");
             instrumentListeners.forEach(l -> l.onInstrumentNotFound(symbol, exchange, type));
             return false;
         }
-        if (knownInstruments.stream()
+        if (subscribeInfos.stream()
                 .filter(instrument -> instrument.type.equals(type))
                 .filter(instrument -> instrument.symbol.equals(symbol))
                 .collect(Collectors.toList()).isEmpty()) {
@@ -549,6 +511,9 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
             return false;
         }
         
+        if (genericInstruments.isEmpty()) {
+            getInstruments();
+        }
         Pair<Double, Double> pair;
         if (subscribeInfo instanceof SubscribeInfoCrypto) {
             Log.info("isInfoCrypro");
@@ -558,12 +523,19 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
         } else {
             //this is a workaround for a saving alias parameters in Bookmap
             //A default tickSize will be accepted if no saved pipsMultipilier
-            Log.info("is NOT InfoCrypro");
-            pair = new ImmutablePair<Double, Double>(genericInstruments.get(alias).getTickSize(), null);
+            InstrumentGeneric generic = genericInstruments.get(alias);
+            Double minSizeInverted;
+            if (generic instanceof InstrumentSpot) {
+                double minSizeInvertedRough = 1/((InstrumentSpot)generic).getMinSize();
+                double minSizeInvertedRounded = Math.round(minSizeInvertedRough);
+                minSizeInverted = minSizeInvertedRounded == 0 ? minSizeInvertedRough : minSizeInvertedRounded;
+            } else if (generic instanceof InstrumentFutures) {
+                minSizeInverted = 1.0;
+            } else {
+                minSizeInverted = null;
+            }
+            pair = new ImmutablePair<Double, Double>(genericInstruments.get(alias).getTickSize(), minSizeInverted);
         }
-        
-
-        String type1 = type.toLowerCase();
 
         Callable<Boolean> callableTask = () -> {
             synchronized (aliasInstruments) {
@@ -571,7 +543,7 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
 
                 if (!isPreviousSubscriptionIgnored && aliasInstruments.containsKey(alias)) {
                     Log.info("Already subscribed to " + alias);
-                    instrumentListeners.forEach(l -> l.onInstrumentAlreadySubscribed(symbol, exchange, type1));
+                    instrumentListeners.forEach(l -> l.onInstrumentAlreadySubscribed(symbol, exchange, type));
                     return false;
                 }
 
@@ -579,10 +551,10 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
                 Log.info("pipsSizeMultipliers put alias " + alias + " pips " + pair.getLeft());
                 pipsSizeMultipliers.put(alias, pair);
                 
-                boolean isSubscribedDepthTrade = subscribeDepthAndTrade(symbol, type1);
+                boolean isSubscribedDepthTrade = subscribeDepthAndTrade(symbol, Market.valueOf(type));
                 if (!isSubscribedDepthTrade) {
                     Log.info("Failed to subscribed to " + alias);
-                    instrumentListeners.forEach(l -> l.onInstrumentNotFound(symbol, exchange, type1));
+                    instrumentListeners.forEach(l -> l.onInstrumentNotFound(symbol, exchange, type));
                     
                     if (previousMultiplier != null) {
                         Log.info("pipsSizeMultipliers put back alias " + alias + " pips " + previousMultiplier);
@@ -596,13 +568,14 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
                 final Instrument instrument = new Instrument(alias, pips);
                 aliasInstruments.put(alias, instrument);
                 Log.info("instrumentInfo to BM alias " + alias + " tickSize " + tickSize);
+                double sizeMultiplier = (double) ObjectUtils.firstNonNull(pipsSizeMultipliers.get(alias).getRight(), 1.0);
+                Log.info("sizeMultiplier " + sizeMultiplier);
 
-                final InstrumentInfo instrumentInfo = new InstrumentInfo(symbol, exchange, type1, tickSize, 1, alias,
-                        false);
+                final InstrumentInfo instrumentInfo = new InstrumentInfo(symbol, exchange, type, tickSize, 1, null, true, sizeMultiplier);
 
                 Log.info("Now subscribed to " + alias);
                 if (!isPreviousSubscriptionIgnored) {
-                    Log.info("onInstrumentAdded " + symbol + " " + tickSize);
+                    Log.info("onInstrumentAdded " + instrumentInfo.toString());
                 instrumentListeners.forEach(l -> l.onInstrumentAdded(alias, instrumentInfo));
                 }
                 return true;
@@ -615,9 +588,7 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
         try {
             result = future.get();
         } catch (InterruptedException | ExecutionException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-            throw new RuntimeException();
+            throw new RuntimeException(e);
         }
         return result;
     }
@@ -626,12 +597,11 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
 	@Override
     public Layer1ApiProviderSupportedFeatures getSupportedFeatures() {
         // Expanding parent supported features, reporting basic trading support
-        Layer1ApiProviderSupportedFeaturesBuilder a = super.getSupportedFeatures().toBuilder();
-//        Log.info("Invoked " + ++featuresInCounter);
-        a.setExchangeUsedForSubscription(false);
-        a.setKnownInstruments(knownInstruments);
-        a.setPipsFunction(s -> {
-            String alias = s.type + "@" + s.symbol;
+        Layer1ApiProviderSupportedFeaturesBuilder a = super.getSupportedFeatures().toBuilder()
+        .setExchangeUsedForSubscription(false)
+        .setKnownInstruments(subscribeInfos)
+        .setPipsFunction(s -> {
+            String alias = getAlias(s);
             
             if (!genericInstruments.containsKey(alias)) {
                 return null;
@@ -650,12 +620,49 @@ public class RealTimeProvider extends ExternalLiveBaseProvider {
             options.add((double) 5_000 * basicTickSize); 
             options.add((double) 10_000 * basicTickSize); 
             return new DefaultAndList<Double>(basicTickSize, options);
+        })
+        .setSizeMultiplierFunction(s -> {
+            String alias = getAlias(s);
+            
+            if (!genericInstruments.containsKey(alias)) {
+                return null;
+            }
+
+            InstrumentGeneric generic = genericInstruments.get(alias);
+            double minSize;
+            if (generic instanceof InstrumentSpot) {
+                minSize = ((InstrumentSpot)generic).getMinSize();
+            } else if (generic instanceof InstrumentFutures) {
+                return new DefaultAndList<Double>(1.0, Collections.singletonList(1.0));
+            } else {
+                return null;
+            }
+            
+            if (minSize >= 1) {
+                return new DefaultAndList<Double>(1/minSize, Collections.singletonList(1/minSize));
+            }
+            double invertedRoundedMinSize = Math.round(1/minSize);
+            List<Double> options = new ArrayList<>();
+            
+            double optionSize = invertedRoundedMinSize;
+            while (optionSize > 0) {
+                options.add(optionSize);
+                optionSize = Math.round(optionSize/10);
+            }
+            return new DefaultAndList<Double>(invertedRoundedMinSize, options);
         });
         return a.build();
     }
 	
+	private String getAlias(SubscribeInfo subscribeInfo) {
+	    StringBuilder sb = new StringBuilder(subscribeInfo.type)
+	            .append("@")
+	            .append(subscribeInfo.symbol);
+	    return sb.toString();
+	}
+	
 	protected void getInstruments() {
-       
+	    
     }
 
 }

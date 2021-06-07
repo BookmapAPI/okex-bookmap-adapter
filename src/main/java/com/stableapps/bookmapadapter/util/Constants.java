@@ -3,7 +3,7 @@ package com.stableapps.bookmapadapter.util;
 public class Constants {
 
     public enum Market{
-        spot, futures
+        SPOT, FUTURES, MARGIN
     }
     public static final String API_KEY_FIELD_NAME = "key";
     public static final String API_KEY_FIELD_LABEL = "API key: Key";
