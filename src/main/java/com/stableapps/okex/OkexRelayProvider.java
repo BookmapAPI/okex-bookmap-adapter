@@ -26,20 +26,19 @@ public class OkexRelayProvider extends RelayProvider {
 
     @Override
     public void login(LoginData loginData) {
-        ExtendedLoginData extendedLoginData = (ExtendedLoginData) loginData;
-
-        if (Boolean
-                .valueOf(extendedLoginData.extendedData.get(Constants.ENABLE_TRADING_CHECKBOX_NAME).getStringValue())) {
-            Layer1ApiProvider provider = new OkexRealTimeTradingProvider(OkexConstants.EXCHANGE,
-                    OkexConstants.WS_PORT_NUMBER, OkexConstants.WS_LINK);
-            setProvider(provider);
-            Log.info("OkexRealtimeTradingProvider " + provider.hashCode());
-        } else {
-            Layer1ApiProvider provider = new OkexRealTimeProvider(OkexConstants.EXCHANGE,
-                    OkexConstants.WS_PORT_NUMBER, OkexConstants.WS_LINK);
-            setProvider(provider);
-            Log.info("OkexRealtimeProvider " + provider.hashCode());
-        }
+        boolean isTradingProvider = (loginData instanceof ExtendedLoginData)
+            && Boolean.parseBoolean(((ExtendedLoginData) loginData)
+                .extendedData
+                .get(Constants.ENABLE_TRADING_CHECKBOX_NAME)
+                .getStringValue());
+    
+        Layer1ApiProvider provider = isTradingProvider 
+            ? new OkexRealTimeTradingProvider(OkexConstants.EXCHANGE,
+                OkexConstants.WS_PORT_NUMBER, OkexConstants.WS_LINK)
+            : new OkexRealTimeProvider(OkexConstants.EXCHANGE,
+                OkexConstants.WS_PORT_NUMBER, OkexConstants.WS_LINK);
+        setProvider(provider);
+        Log.info(provider.getClass().getSimpleName() + " " + provider.hashCode());
         ListenableHelper.addListeners(provider, this);
         super.login(loginData);
     }
