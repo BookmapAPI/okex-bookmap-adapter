@@ -15,7 +15,7 @@ def okcoinVersion = 'alpha-1.0.0.12'
 repositories {
     mavenCentral()
     maven {
-        url "http://maven.bookmap.com/maven2/releases/"
+        url "https://maven.bookmap.com/maven2/releases/"
     }
 }
 
